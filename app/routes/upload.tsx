@@ -73,6 +73,7 @@ const Upload = () => {
     await puter.kv.set(`resume:${uuid}`, JSON.stringify(data))
     setStatusText("Analysis complete!")
     console.log(data)
+    navigate(`/resume/${uuid}`)
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
