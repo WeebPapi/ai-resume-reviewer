@@ -3,7 +3,7 @@ import type { Route } from "./+types/home"
 // import { resumes } from "../../constants"
 import ResumeCard from "~/components/Resumecard"
 import { usePuterStore } from "~/lib/puter"
-import { useNavigate } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { useEffect, useState } from "react"
 
 export function meta({}: Route.MetaArgs) {
@@ -14,52 +14,92 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function Home() {
-  const { auth, kv, fs } = usePuterStore()
+  const { auth, kv, fs, isLoading } = usePuterStore()
   const navigate = useNavigate()
 
   const [resumes, setResumes] = useState<Resume[]>([])
+  const [loadingResumes, setLoadingResumes] = useState(false)
   useEffect(() => {
-    if (!auth.isAuthenticated) navigate("/auth?next=/")
-    else
-      (kv.list("resume") as Promise<string[]>).then((resumeList: string[]) => {
-        resumeList?.map((resumeId: string) =>
-          kv.get(resumeId).then((result) => {
-            const parsedRes = JSON.parse(result!)
-            setResumes((prev) => {
-              if (!prev.find((item) => item.id === parsedRes.id))
-                return [...prev, parsedRes]
-              return prev
-            })
-          })
-        )
-      })
-  }, [auth.isAuthenticated])
+    if (!isLoading && !auth.isAuthenticated) navigate("/auth?next=/")
+    // const loadImages = async () => {
+    //   const resumeList = (await kv.list("resume")) as string[]
+    //   const imagesListPromises = resumeList?.map(async (resumeKey) => {
+    //     const loadImagePath = async () => {
+    //       return JSON.parse((await kv.get(resumeKey)) as string) as Resume
+    //     }
+    //     const resume = await loadImagePath()
+    //     let imageUrl = resume.imagePath
+    //     setResumes((prev) => {
+    //       if (!prev.find((res) => res.id === resume.id))
+    //         return [...prev, resume]
+    //       return prev
+    //     })
+    //     return imageUrl
+    //   })
+    //   const imagesListPaths = await Promise.all(imagesListPromises)
+    //   const imagesList = await Promise.all(
+    //     imagesListPaths.map(async (imgPath) => {
+    //       return URL.createObjectURL((await fs.read(imgPath)) as Blob)
+    //     })
+    //   )
+    //   setImages(imagesList)
+    // }
+    // loadImages()
+  }, [auth.isAuthenticated, kv, isLoading])
+
+  useEffect(() => {
+    const loadResumes = async () => {
+      setLoadingResumes(true)
+
+      const resumes = (await kv.list("resume:*", true)) as KVItem[]
+
+      const parsedResumes = resumes?.map(
+        (resume) => JSON.parse(resume.value) as Resume
+      )
+
+      setResumes(parsedResumes || [])
+      setLoadingResumes(false)
+    }
+
+    loadResumes()
+  }, [])
 
   return (
     <main className="bg-[url('/images/bg-main.svg')] bg-cover">
-      <button onClick={() => console.log(resumes)}>click</button>
       <Navbar />
       <section className="main-section">
-        <div className="page-heading capitalize py-16">
-          <h1>Track your applications & resume ratings</h1>
-          <h2>review your submissions and check AI-powered feedback</h2>
+        <div className="page-heading py-16">
+          <h1>Track Your Applications & Resume Ratings</h1>
+          {!loadingResumes && resumes?.length === 0 ? (
+            <h2>No resumes found. Upload your first resume to get feedback.</h2>
+          ) : (
+            <h2>Review your submissions and check AI-powered feedback.</h2>
+          )}
         </div>
-        <section className="resumes-section">
-          {/* TODO: An issue with images being loaded, likely having to do with %20 expressing a space in file names */}
-          {resumes &&
-            resumes.length > 0 &&
-            resumes.map((resume) => (
-              <ResumeCard
-                key={resume.id}
-                id={resume.id}
-                companyName={resume.companyName}
-                jobTitle={resume.jobTitle}
-                feedback={resume.feedback}
-                imagePath={`https://api.puter.com/read?file=${resume.imagePath}`}
-                resumePath={resume.resumePath}
-              />
+        {loadingResumes && (
+          <div className="flex flex-col items-center justify-center">
+            <img src="/images/resume-scan-2.gif" className="w-[200px]" />
+          </div>
+        )}
+
+        {!loadingResumes && resumes.length > 0 && (
+          <div className="resumes-section">
+            {resumes.map((resume) => (
+              <ResumeCard key={resume.id} resume={resume} />
             ))}
-        </section>
+          </div>
+        )}
+
+        {!loadingResumes && resumes?.length === 0 && (
+          <div className="flex flex-col items-center justify-center mt-10 gap-4">
+            <Link
+              to="/upload"
+              className="primary-button w-fit text-xl font-semibold"
+            >
+              Upload Resume
+            </Link>
+          </div>
+        )}
       </section>
     </main>
   )
